@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Pencil, Trash, X } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type User = {
@@ -83,12 +84,16 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
   const itemsPerPage = 10;
-
+  const router = useRouter();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ name: "", email: "" });
-
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push("/login");
+    });
+  }, [router]);
   const fetchUsers = async (page: number) => {
     setLoading(true);
     const from = (page - 1) * itemsPerPage;
@@ -165,11 +170,8 @@ export default function UsersPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
           <div>
             <h1 className="text-xl lg:text-2xl font-bold text-gray-900 mb-0.5">
-              Users
+              Website Users
             </h1>
-            <p className="text-xs text-gray-600">
-              Manage your users and their permissions
-            </p>
           </div>
         </div>
 

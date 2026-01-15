@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Users,
@@ -96,7 +98,12 @@ export default function DashboardPage() {
   const [recentArticles, setRecentArticles] = useState<NewsItem[]>([]);
   const [topAuthors, setTopAuthors] = useState<Author[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const router = useRouter();
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push("/login");
+    });
+  }, [router]);
   useEffect(() => {
     const fetchAllStats = async () => {
       setLoading(true);
@@ -269,9 +276,6 @@ export default function DashboardPage() {
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
-          <p className="text-gray-600">
-            Overview of your news platform performance
-          </p>
         </div>
       </div>
       {/* Stats Cards */}

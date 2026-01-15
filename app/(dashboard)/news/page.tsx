@@ -10,6 +10,7 @@ import {
   Plus,
   X,
 } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type News = {
@@ -125,6 +126,7 @@ export default function NewsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
+  const router = useRouter();
   const [editForm, setEditForm] = useState({
     title: "",
     excerpt: "",
@@ -136,7 +138,11 @@ export default function NewsPage() {
     author_bio: "",
     is_breaking: false,
   });
-
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push("/login");
+    });
+  }, [router]);
   const fetchCategories = async () => {
     const { data, error } = await supabase
       .from("categories")
@@ -305,9 +311,6 @@ export default function NewsPage() {
             <h1 className="text-xl lg:text-2xl font-bold text-gray-900 mb-0.5">
               News Articles
             </h1>
-            <p className="text-xs text-gray-600">
-              Manage and publish your news content
-            </p>
           </div>
           <button
             onClick={handleAdd}

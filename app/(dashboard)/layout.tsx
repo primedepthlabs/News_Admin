@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChartBar,
@@ -9,7 +9,11 @@ import {
   List,
   X,
   Newspaper,
+  SignOut,
+  CheckCircle,
 } from "@phosphor-icons/react";
+import { supabase } from "@/lib/supabaseClient";
+import { ShieldCheck } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -18,19 +22,84 @@ export default function DashboardLayout({
 }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
   const menuItems = [
     { id: "/dashboard", label: "Dashboard", icon: ChartBar },
+
+    { id: "/approval", label: "News Approval", icon: CheckCircle },
+    { id: "/acl", label: "Access Control", icon: ShieldCheck },
+    { id: "/reporters", label: "Reporter Panel", icon: ChartBar },
     { id: "/users", label: "Users", icon: Users },
     { id: "/news", label: "News", icon: Newspaper },
     { id: "/settings", label: "Settings", icon: Gear },
   ];
 
+  useEffect(() => {
+    fetchUserRoleAndPermissions();
+  }, []);
+
+  const fetchUserRoleAndPermissions = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      const { data: userData, error } = await supabase
+        .from("dashboardUsers")
+        .select("role, permissions")
+        .eq("id", session.user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user data:", error);
+        setLoading(false);
+        return;
+      }
+
+      setUserRole(userData?.role || null);
+      setUserPermissions(userData?.permissions || []);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error in fetchUserRoleAndPermissions:", err);
+      setLoading(false);
+    }
+  };
+
+  // Filter menu items based on role and permissions
+  const visibleMenuItems = menuItems.filter((item) => {
+    // Admins see everything
+    if (userRole === "admin") return true;
+
+    // Reporters only see items they have permission for
+    return userPermissions.includes(item.id);
+  });
+
   const handleMenuItemClick = (path: string) => {
     router.push(path);
     setIsMobileMenuOpen(false);
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      router.push("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -74,7 +143,7 @@ export default function DashboardLayout({
                 : "opacity-100"
             }`}
           >
-            My App
+            {userRole === "admin" ? "Admin" : "Reporter"}
           </h2>
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -95,43 +164,88 @@ export default function DashboardLayout({
         </div>
 
         <nav className="flex-1 p-2 space-y-1">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleMenuItemClick(item.id)}
-                title={isCollapsed ? item.label : ""}
-                className={`
-                  w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
-                  ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
-                  ${
-                    isActive
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }
-                `}
-              >
-                <Icon
-                  className={`h-4 w-4 shrink-0 ${
-                    isCollapsed ? "lg:mr-0" : "mr-2"
-                  }`}
-                  weight={isActive ? "fill" : "regular"}
+          {loading ? (
+            // Loading skeleton
+            <div className="space-y-1">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-8 bg-gray-200 animate-pulse rounded-lg"
                 />
-                <span
-                  className={`transition-all duration-300 ${
-                    isCollapsed
-                      ? "lg:opacity-0 lg:w-0 lg:overflow-hidden"
-                      : "opacity-100"
-                  }`}
+              ))}
+            </div>
+          ) : (
+            // Render filtered menu items
+            visibleMenuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleMenuItemClick(item.id)}
+                  title={isCollapsed ? item.label : ""}
+                  className={`
+                    w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
+                    ${
+                      isCollapsed
+                        ? "lg:justify-center lg:px-0"
+                        : "justify-start"
+                    }
+                    ${
+                      isActive
+                        ? "bg-gray-900 text-white"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }
+                  `}
                 >
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
+                  <Icon
+                    className={`h-4 w-4 shrink-0 ${
+                      isCollapsed ? "lg:mr-0" : "mr-2"
+                    }`}
+                    weight={isActive ? "fill" : "regular"}
+                  />
+                  <span
+                    className={`transition-all duration-300 ${
+                      isCollapsed
+                        ? "lg:opacity-0 lg:w-0 lg:overflow-hidden"
+                        : "opacity-100"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </nav>
+
+        {/* Logout Button */}
+        <div className="p-2 border-t border-gray-200">
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title={isCollapsed ? "Logout" : ""}
+            className={`
+              w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
+              ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
+              text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+          >
+            <SignOut
+              className={`h-4 w-4 shrink-0 ${isCollapsed ? "lg:mr-0" : "mr-2"}`}
+              weight="bold"
+            />
+            <span
+              className={`transition-all duration-300 ${
+                isCollapsed
+                  ? "lg:opacity-0 lg:w-0 lg:overflow-hidden"
+                  : "opacity-100"
+              }`}
+            >
+              {loggingOut ? "Logging out..." : "Logout"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Content Area */}
