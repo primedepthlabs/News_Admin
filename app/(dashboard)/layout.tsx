@@ -11,6 +11,7 @@ import {
   Newspaper,
   SignOut,
   CheckCircle,
+  MegaphoneIcon,
 } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabaseClient";
 import { ShieldCheck } from "lucide-react";
@@ -34,6 +35,11 @@ export default function DashboardLayout({
 
     { id: "/approval", label: "News Approval", icon: CheckCircle },
     { id: "/acl", label: "Access Control", icon: ShieldCheck },
+    {
+      id: "advertisements",
+      label: "Advertisement Management",
+      icon: MegaphoneIcon,
+    },
     { id: "/reporters", label: "Reporter Panel", icon: ChartBar },
     { id: "/users", label: "Users", icon: Users },
     { id: "/news", label: "News", icon: Newspaper },

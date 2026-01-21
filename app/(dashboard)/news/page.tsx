@@ -9,6 +9,9 @@ import {
   TrendUp,
   Plus,
   X,
+  CheckCircle, // ADD
+  XCircle, // ADD
+  Clock,
 } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -29,6 +32,7 @@ type News = {
   author_id: string | null;
   view_count: number;
   share_count: number;
+  status: "pending" | "approved" | "rejected";
 };
 
 type Category = {
@@ -190,6 +194,29 @@ export default function NewsPage() {
     return category?.name || "Unknown";
   };
 
+  const getStatusBadge = (status: string) => {
+    if (status === "approved") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-700">
+          <CheckCircle className="h-3 w-3" weight="fill" />
+          Approved
+        </span>
+      );
+    } else if (status === "rejected") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-red-100 text-red-700">
+          <XCircle className="h-3 w-3" weight="fill" />
+          Rejected
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full bg-yellow-100 text-yellow-700">
+        <Clock className="h-3 w-3" weight="fill" />
+        Pending
+      </span>
+    );
+  };
   const resetForm = () => {
     setEditForm({
       title: "",
@@ -226,6 +253,9 @@ export default function NewsPage() {
   };
 
   const handleAddNews = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const { error } = await supabase.from("news").insert([
       {
         title: editForm.title,
@@ -239,6 +269,8 @@ export default function NewsPage() {
         author_name: editForm.author_name || null,
         author_bio: editForm.author_bio || null,
         is_breaking: editForm.is_breaking,
+
+        author_id: session?.user.id || null,
       },
     ]);
 
@@ -376,6 +408,7 @@ export default function NewsPage() {
                                   Breaking
                                 </span>
                               )}
+                              {getStatusBadge(newsItem.status)}
                             </div>
                             {newsItem.location && (
                               <span className="text-[10px] text-gray-500">
@@ -411,7 +444,7 @@ export default function NewsPage() {
                               month: "short",
                               day: "numeric",
                               year: "numeric",
-                            }
+                            },
                           )}
                         </td>
                         <td className="py-2 px-3">
@@ -436,87 +469,77 @@ export default function NewsPage() {
                 </table>
               </div>
 
-              {/* Mobile Card View */}
-              <div className="lg:hidden p-2 space-y-2">
-                {news.map((newsItem) => (
-                  <div
-                    key={newsItem.id}
-                    className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-xs font-semibold text-gray-900 mb-1.5 line-clamp-2">
-                            {newsItem.title}
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-white text-gray-700 border border-gray-200">
-                              {getCategoryName(newsItem.category_id)}
-                            </span>
-                            {newsItem.is_breaking && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-red-100 text-red-700 flex items-center gap-0.5">
-                                <TrendUp
-                                  className="h-2.5 w-2.5"
-                                  weight="bold"
-                                />
-                                Breaking
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            className="h-7 w-7 flex items-center justify-center hover:bg-white rounded transition-colors cursor-pointer"
-                            onClick={() => handleEdit(newsItem)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-gray-700" />
-                          </button>
-                          <button
-                            className="h-7 w-7 flex items-center justify-center hover:bg-red-100 rounded transition-colors cursor-pointer"
-                            onClick={() => handleDelete(newsItem)}
-                          >
-                            <Trash className="h-3.5 w-3.5 text-red-600" />
-                          </button>
-                        </div>
-                      </div>
+              {/* Mobile Card View - 3 Cards Grid */}
+              <div className="lg:hidden p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {news.map((newsItem) => (
+                    <div
+                      key={newsItem.id}
+                      className="bg-white rounded-lg border border-gray-200 p-2 hover:shadow-md transition-shadow"
+                    >
+                      {/* Image */}
+                      {newsItem.image && (
+                        <img
+                          src={newsItem.image}
+                          alt={newsItem.title}
+                          className="w-full h-12 object-cover rounded mb-1.5"
+                        />
+                      )}
 
-                      <div className="space-y-0.5 text-[10px]">
-                        <p className="text-gray-600">
-                          By {newsItem.author_name || "Anonymous"}
-                        </p>
-                        {newsItem.location && (
-                          <p className="text-gray-500">
-                            📍 {newsItem.location}
-                          </p>
+                      {/* Badges */}
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        {newsItem.is_breaking && (
+                          <span className="px-1 py-0.5 text-[7px] font-semibold rounded-full bg-red-100 text-red-700 flex items-center gap-0.5">
+                            <TrendUp className="h-1.5 w-1.5" weight="bold" />
+                            Breaking
+                          </span>
                         )}
+                        <div className="scale-75 origin-left">
+                          {getStatusBadge(newsItem.status)}
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1.5 border-t border-gray-200">
-                        <div className="flex items-center gap-2.5 text-[10px] text-gray-600">
-                          <div className="flex items-center gap-0.5">
-                            <Eye className="h-3 w-3" weight="duotone" />
-                            <span>{newsItem.view_count}</span>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            <Share className="h-3 w-3" weight="duotone" />
-                            <span>{newsItem.share_count}</span>
-                          </div>
+                      {/* Title */}
+                      <h3 className="text-[9px] font-semibold text-gray-900 mb-1 line-clamp-2 leading-tight">
+                        {newsItem.title}
+                      </h3>
+
+                      {/* Category */}
+                      <span className="inline-block px-1 py-0.5 text-[7px] font-medium rounded-full bg-gray-100 text-gray-700 mb-1">
+                        {getCategoryName(newsItem.category_id)}
+                      </span>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-1.5 text-[7px] text-gray-600 mb-1.5">
+                        <div className="flex items-center gap-0.5">
+                          <Eye className="h-2 w-2" weight="duotone" />
+                          <span>{newsItem.view_count}</span>
                         </div>
-                        <span className="text-[10px] text-gray-500">
-                          {new Date(newsItem.created_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                            }
-                          )}
-                        </span>
+                        <div className="flex items-center gap-0.5">
+                          <Share className="h-2 w-2" weight="duotone" />
+                          <span>{newsItem.share_count}</span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-1">
+                        <button
+                          className="flex-1 h-5 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                          onClick={() => handleEdit(newsItem)}
+                        >
+                          <Pencil className="h-2.5 w-2.5 text-gray-700" />
+                        </button>
+                        <button
+                          className="flex-1 h-5 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded transition-colors"
+                          onClick={() => handleDelete(newsItem)}
+                        >
+                          <Trash className="h-2.5 w-2.5 text-red-600" />
+                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-
               {/* Pagination */}
               <div className="flex flex-col sm:flex-row items-center justify-between px-3 py-2 border-t border-gray-200 gap-2">
                 <p className="text-[10px] text-gray-600">
