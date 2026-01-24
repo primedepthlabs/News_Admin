@@ -12,6 +12,8 @@ import {
   SignOut,
   CheckCircle,
   MegaphoneIcon,
+  UserCircle,
+  FolderOpen,
 } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabaseClient";
 import { ShieldCheck } from "lucide-react";
@@ -32,9 +34,18 @@ export default function DashboardLayout({
 
   const menuItems = [
     { id: "/dashboard", label: "Dashboard", icon: ChartBar },
-
+    {
+      id: "/my-panel",
+      label: "My Panel",
+      icon: UserCircle,
+    },
     { id: "/approval", label: "News Approval", icon: CheckCircle },
     { id: "/acl", label: "Access Control", icon: ShieldCheck },
+    {
+      id: "/categories", // Add this
+      label: "Categories", // Add this
+      icon: FolderOpen, // Import FolderOpen from lucide-react
+    },
     {
       id: "advertisements",
       label: "Advertisement Management",
@@ -45,7 +56,6 @@ export default function DashboardLayout({
     { id: "/news", label: "News", icon: Newspaper },
     { id: "/settings", label: "Settings", icon: Gear },
   ];
-
   useEffect(() => {
     fetchUserRoleAndPermissions();
   }, []);
@@ -82,9 +92,13 @@ export default function DashboardLayout({
     }
   };
 
-  // Filter menu items based on role and permissions
   const visibleMenuItems = menuItems.filter((item) => {
-    // Admins see everything
+    // My Panel is only for reporters
+    if (item.id === "/my-panel") {
+      return userRole === "reporter";
+    }
+
+    // Admins see everything else (except My Panel which is handled above)
     if (userRole === "admin") return true;
 
     // Reporters only see items they have permission for

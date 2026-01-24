@@ -400,11 +400,7 @@ export default function AuthForm() {
           </div>
         </div>
 
-        <div className="text-center mt-4">
-          <p className="text-[10px] text-gray-500">
-            {!isLogin && "Only one admin account allowed"}
-          </p>
-        </div>
+   
       </div>
     </div>
   );

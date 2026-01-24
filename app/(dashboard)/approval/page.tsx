@@ -30,6 +30,7 @@ type News = {
   created_at: string;
   author_id: string | null;
   status: "pending" | "approved" | "rejected";
+  links: Array<{ url: string; label: string }> | null;
 };
 
 type Category = {
@@ -336,7 +337,7 @@ export default function NewsApprovalPage() {
                           {
                             month: "short",
                             day: "numeric",
-                          }
+                          },
                         )}
                       </p>
                     </div>
@@ -447,7 +448,7 @@ export default function NewsApprovalPage() {
                         month: "long",
                         day: "numeric",
                         year: "numeric",
-                      }
+                      },
                     )}
                   </span>
                 </div>
@@ -476,6 +477,27 @@ export default function NewsApprovalPage() {
                   <p className="text-xs text-gray-700">
                     {selectedNews.author_bio}
                   </p>
+                </div>
+              )}
+              {/* Add this after the Author Bio section */}
+              {selectedNews.links && selectedNews.links.length > 0 && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-900 mb-2">
+                    Related Links
+                  </p>
+                  <div className="flex gap-2">
+                    {selectedNews.links.map((link, idx) => (
+                      <a
+                        key={idx}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {link.label || link.url}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
