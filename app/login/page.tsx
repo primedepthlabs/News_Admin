@@ -36,6 +36,10 @@ export default function AuthForm() {
     fullName: "",
   });
 
+  const [selectedRole, setSelectedRole] = useState<"admin" | "reporter">(
+    "reporter",
+  );
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const resetForm = () => {
     setFormData({
       email: "",
@@ -72,10 +76,21 @@ export default function AuthForm() {
       setSuccess(`Welcome back, ${userData.full_name}!`);
 
       setTimeout(() => {
-        if (userData.role === "admin") {
+        // Route based on role and permissions
+        if (userData.role === "superadmin" || userData.role === "admin") {
           router.push("/dashboard");
+        } else if (userData.role === "reporter") {
+          // Check if reporter has approval permissions
+          if (
+            userData.permissions &&
+            userData.permissions.includes("/approval")
+          ) {
+            router.push("/approval");
+          } else {
+            router.push("/my-panel");
+          }
         } else {
-          router.push("/news");
+          router.push("/my-panel");
         }
       }, 800);
     } catch (err: any) {
@@ -85,16 +100,7 @@ export default function AuthForm() {
 
   const handleSignup = async () => {
     try {
-      // Check if admin already exists
-      const { data: existingAdmin, error: checkError } = await supabase
-        .from("dashboardUsers")
-        .select("id")
-        .eq("role", "admin")
-        .single();
-
-      if (existingAdmin) {
-        throw new Error("Admin account already exists. Contact support.");
-      }
+      // Allow signup with selected role
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -111,14 +117,20 @@ export default function AuthForm() {
             id: authData.user.id,
             email: formData.email,
             full_name: formData.fullName,
-            role: "admin",
+            role: selectedRole, // Use selected role
+            permissions:
+              selectedRole === "admin"
+                ? ["/dashboard", "/approval", "/news", "/my-panel"]
+                : ["/my-panel"], // Set default permissions based on role
             created_at: new Date().toISOString(),
           },
         ]);
 
       if (insertError) throw insertError;
 
-      setSuccess("Admin account created! Please login.");
+      setSuccess(
+        `${selectedRole === "admin" ? "Admin" : "Reporter"} account created! Please login.`,
+      );
       setTimeout(() => {
         setIsLogin(true);
         resetForm();
@@ -184,20 +196,31 @@ export default function AuthForm() {
             News Admin Portal
           </h1>
           <p className="text-[10px] text-gray-600">
-            {isLogin ? "Sign in to your account" : "Create admin account"}
+            {isLogin ? "Sign in to your account" : "Create your account"}
           </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="grid grid-cols-2 border-b border-gray-200 bg-gray-50">
+          <div className="grid grid-cols-2 border-b border-gray-200 bg-gray-50 relative">
+            {/* Animated underline indicator */}
+            <div
+              className={`absolute bottom-0 h-0.5 bg-gray-900 transition-all duration-300 ease-out ${
+                isLogin ? "left-0 w-1/2" : "left-1/2 w-1/2"
+              }`}
+            />
             <button
               onClick={() => {
-                setIsLogin(true);
-                resetForm();
+                if (isLogin) return; // Already on login
+                setIsTransitioning(true);
+                setTimeout(() => {
+                  setIsLogin(true);
+                  resetForm();
+                  setIsTransitioning(false);
+                }, 150);
               }}
-              className={`py-2 text-xs font-semibold transition-all ${
+              className={`py-2 text-xs font-semibold transition-all duration-300 relative z-10 ${
                 isLogin
-                  ? "text-gray-900 border-b-2 border-gray-900 bg-white"
+                  ? "text-gray-900 bg-white"
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -205,12 +228,17 @@ export default function AuthForm() {
             </button>
             <button
               onClick={() => {
-                setIsLogin(false);
-                resetForm();
+                if (!isLogin) return; // Already on signup
+                setIsTransitioning(true);
+                setTimeout(() => {
+                  setIsLogin(false);
+                  resetForm();
+                  setIsTransitioning(false);
+                }, 150);
               }}
-              className={`py-2 text-xs font-semibold transition-all ${
+              className={`py-2 text-xs font-semibold transition-all duration-300 relative z-10 ${
                 !isLogin
-                  ? "text-gray-900 border-b-2 border-gray-900 bg-white"
+                  ? "text-gray-900 bg-white"
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -218,7 +246,13 @@ export default function AuthForm() {
             </button>
           </div>
 
-          <div className="p-4 space-y-3">
+          <div
+            className={`p-4 space-y-3 transition-all duration-300 ${
+              isTransitioning
+                ? "opacity-0 translate-x-4"
+                : "opacity-100 translate-x-0"
+            }`}
+          >
             {error && (
               <div className="px-2.5 py-2 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
                 <X
@@ -270,7 +304,61 @@ export default function AuthForm() {
                 </div>
               </div>
             )}
+            {!isLogin && (
+              <div className="space-y-2 pb-2 border-b border-gray-200">
+                <label className="text-[10px] font-semibold text-gray-900">
+                  Account Type <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="reporter"
+                      checked={selectedRole === "reporter"}
+                      onChange={(e) => setSelectedRole("reporter")}
+                      className="w-3.5 h-3.5 text-gray-900 border-gray-300 focus:ring-gray-900 cursor-pointer"
+                      disabled={loading}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <User
+                        className="h-3.5 w-3.5 text-gray-600"
+                        weight="duotone"
+                      />
+                      <span className="text-xs text-gray-900 font-medium">
+                        Reporter
+                      </span>
+                    </div>
+                  </label>
 
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="admin"
+                      checked={selectedRole === "admin"}
+                      onChange={(e) => setSelectedRole("admin")}
+                      className="w-3.5 h-3.5 text-gray-900 border-gray-300 focus:ring-gray-900 cursor-pointer"
+                      disabled={loading}
+                    />
+                    <div className="flex items-center gap-1.5">
+                      <UserCircle
+                        className="h-3.5 w-3.5 text-gray-600"
+                        weight="duotone"
+                      />
+                      <span className="text-xs text-gray-900 font-medium">
+                        Admin
+                      </span>
+                    </div>
+                  </label>
+                </div>
+                <p className="text-[9px] text-gray-500 mt-1">
+                  {selectedRole === "reporter"
+                    ? "Can create and manage own articles"
+                    : "Can approve articles and manage all content"}
+                </p>
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-[10px] font-semibold text-gray-900">
                 Email <span className="text-red-500">*</span>
@@ -399,8 +487,6 @@ export default function AuthForm() {
             </button>
           </div>
         </div>
-
-   
       </div>
     </div>
   );

@@ -1,1 +1,73 @@
 @import "tailwindcss";
+
+/* ============================================
+   TREMOR DROPDOWN FIXES - CORRECTED VERSION
+   ============================================ */
+
+/* Fix Select Dropdown Menu */
+[role="listbox"] {
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 0.5rem !important;
+  margin-top: 0.25rem !important;
+  max-height: 320px !important;
+  overflow-y: auto !important;
+  z-index: 9999 !important;
+}
+
+/* Fix DateRangePicker Calendar */
+[role="dialog"] {
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border-radius: 0.75rem !important;
+  z-index: 9999 !important;
+}
+
+/* Dropdown Items Styling */
+[role="option"] {
+  background-color: white !important;
+  padding: 0.5rem 0.75rem !important;
+  cursor: pointer !important;
+}
+
+[role="option"]:hover {
+  background-color: #f3f4f6 !important;
+}
+
+/* Selected Item */
+[role="option"][aria-selected="true"] {
+  background-color: #eff6ff !important;
+  color: #1e40af !important;
+}
+
+/* Fix Trigger Buttons */
+button[aria-haspopup="listbox"],
+button[id*="headlessui-combobox-button"] {
+  background-color: white !important;
+  border: 1px solid #d1d5db !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.2s !important;
+}
+
+button[aria-haspopup="listbox"]:hover,
+button[id*="headlessui-combobox-button"]:hover {
+  border-color: #9ca3af !important;
+}
+
+button[aria-haspopup="listbox"]:focus,
+button[id*="headlessui-combobox-button"]:focus {
+  outline: none !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+/* Ensure proper z-index layering */
+[data-headlessui-state="open"] {
+  z-index: 9999 !important;
+}

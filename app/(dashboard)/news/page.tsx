@@ -18,13 +18,18 @@ import {
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { SocialIcon } from "react-social-icons";
-
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+  order: number;
+};
 type News = {
   id: number;
   title: string;
   excerpt: string | null;
   content: string;
   image: string | null;
+  media: MediaItem[] | null;
   category_id: number | null;
   location: string | null;
   author_name: string | null;
@@ -209,7 +214,21 @@ export default function NewsPage() {
       </span>
     );
   };
+  const getYouTubeVideoId = (url: string): string | null => {
+    const patterns = [
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([^&]+)/,
+      /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([^?]+)/,
+      /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([^?]+)/,
+    ];
 
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return null;
+  };
   const handlePreview = (newsItem: News) => {
     setSelectedNews(newsItem);
     setIsPreviewOpen(true);
@@ -498,13 +517,89 @@ export default function NewsPage() {
 
             {/* Dialog Content */}
             <div className="overflow-y-auto p-6 space-y-4">
-              {/* Image */}
+              {/* Cover Image */}
               {selectedNews.image && (
                 <img
                   src={selectedNews.image}
                   alt={selectedNews.title}
                   className="w-full h-64 object-cover rounded-lg"
                 />
+              )}
+              {/* Media Gallery - Compact Inline */}
+              {selectedNews.media && selectedNews.media.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
+                    <svg
+                      className="h-3.5 w-3.5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Gallery ({selectedNews.media.length})
+                  </h3>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {selectedNews.media
+                      .sort((a, b) => a.order - b.order)
+                      .map((item, index) => (
+                        <div key={index} className="relative group">
+                          {item.type === "image" ? (
+                            <div className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors">
+                              <img
+                                src={item.url}
+                                alt={`#${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                              <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded">
+                                #{index + 1}
+                              </div>
+                              <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded">
+                                IMG
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative aspect-square rounded overflow-hidden border-2 border-dashed border-purple-300 bg-purple-50 hover:border-purple-400 transition-colors">
+                              {getYouTubeVideoId(item.url) ? (
+                                <iframe
+                                  className="w-full h-full"
+                                  src={`https://www.youtube.com/embed/${getYouTubeVideoId(item.url)}`}
+                                  title={`Video ${index + 1}`}
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                ></iframe>
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center p-2">
+                                  <svg
+                                    className="h-8 w-8 text-purple-400 mb-1"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                  </svg>
+                                  <span className="text-[8px] text-purple-600 font-bold text-center">
+                                    ERROR
+                                  </span>
+                                </div>
+                              )}
+                              <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded">
+                                #{index + 1}
+                              </div>
+                              <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-purple-500 text-white text-[9px] font-bold rounded">
+                                VID
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
               )}
 
               {/* Badges */}

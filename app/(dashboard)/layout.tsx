@@ -1,6 +1,5 @@
 "use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // Add useMemo
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChartBar,
@@ -14,6 +13,7 @@ import {
   MegaphoneIcon,
   UserCircle,
   FolderOpen,
+  Lifebuoy,
 } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabaseClient";
 import { ShieldCheck } from "lucide-react";
@@ -29,9 +29,10 @@ export default function DashboardLayout({
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ticketCount, setTicketCount] = useState(0);
   const pathname = usePathname();
-  const router = useRouter();
 
+  const router = useRouter();
   const menuItems = [
     { id: "/dashboard", label: "Dashboard", icon: ChartBar },
     {
@@ -42,24 +43,126 @@ export default function DashboardLayout({
     { id: "/approval", label: "News Approval", icon: CheckCircle },
     { id: "/acl", label: "Access Control", icon: ShieldCheck },
     {
-      id: "/categories", // Add this
-      label: "Categories", // Add this
-      icon: FolderOpen, // Import FolderOpen from lucide-react
+      id: "/categories",
+      label: "Categories",
+      icon: FolderOpen,
     },
     {
       id: "advertisements",
       label: "Advertisement Management",
       icon: MegaphoneIcon,
     },
-    { id: "/reporters", label: "Reporter Panel", icon: ChartBar },
+    { id: "/reporters", label: "Team", icon: ChartBar },
     { id: "/users", label: "Users", icon: Users },
     { id: "/news", label: "News", icon: Newspaper },
     { id: "/settings", label: "Settings", icon: Gear },
+    {
+      id: "/support",
+      label: "Support",
+      icon: Lifebuoy,
+      isSupport: true,
+      showBadge: true,
+    },
   ];
   useEffect(() => {
     fetchUserRoleAndPermissions();
   }, []);
+  // Real-time permissions check for sidebar
+  useEffect(() => {
+    const setupRealtimeSubscription = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
+      if (!session) return;
+
+      console.log(
+        "🔴 Setting up real-time subscription for user:",
+        session.user.id,
+      );
+
+      // Subscribe to changes in the dashboardUsers table for current user
+      const channel = supabase
+        .channel("sidebar-permissions-realtime")
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "dashboardUsers",
+            filter: `id=eq.${session.user.id}`,
+          },
+          (payload) => {
+            console.log("🟢 Real-time update received:", payload);
+
+            const newRole = payload.new.role;
+            const newPermissions = payload.new.permissions || [];
+
+            console.log("🔄 Updating sidebar with new permissions:", {
+              oldRole: userRole,
+              newRole,
+              oldPermissions: userPermissions,
+              newPermissions,
+            });
+
+            setUserRole(newRole);
+            setUserPermissions(newPermissions);
+          },
+        )
+        .subscribe((status) => {
+          console.log("📡 Subscription status:", status);
+        });
+
+      // Cleanup subscription on unmount
+      return () => {
+        console.log("🔵 Cleaning up real-time subscription");
+        supabase.removeChannel(channel);
+      };
+    };
+
+    setupRealtimeSubscription();
+  }, []); // Empty dependency - set up once on mount
+  // Fetch ticket count for admins/superadmins
+  useEffect(() => {
+    const fetchTicketCount = async () => {
+      if (!userRole || userRole === "reporter") return;
+
+      try {
+        const { count } = await supabase
+          .from("support_tickets")
+          .select("*", { count: "exact", head: true })
+          .in("status", ["open", "in_progress"]);
+
+        setTicketCount(count || 0);
+      } catch (err) {
+        console.error("Error fetching ticket count:", err);
+      }
+    };
+
+    fetchTicketCount();
+
+    // Real-time subscription for ticket count
+    if (userRole && userRole !== "reporter") {
+      const channel = supabase
+        .channel("ticket-count-updates")
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "support_tickets",
+          },
+          () => {
+            fetchTicketCount();
+          },
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [userRole]);
   const fetchUserRoleAndPermissions = async () => {
     try {
       const {
@@ -91,20 +194,27 @@ export default function DashboardLayout({
       setLoading(false);
     }
   };
+  const visibleMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      // Support is ALWAYS visible for everyone
+      if (item.isSupport) {
+        return true;
+      }
 
-  const visibleMenuItems = menuItems.filter((item) => {
-    // My Panel is only for reporters
-    if (item.id === "/my-panel") {
-      return userRole === "reporter";
-    }
+      // SuperAdmin sees everything
+      if (userRole === "superadmin") {
+        return true;
+      }
 
-    // Admins see everything else (except My Panel which is handled above)
-    if (userRole === "admin") return true;
+      // My Panel requires BOTH reporter role AND permission
+      if (item.id === "/my-panel") {
+        return userRole === "reporter" && userPermissions.includes("/my-panel");
+      }
 
-    // Reporters only see items they have permission for
-    return userPermissions.includes(item.id);
-  });
-
+      // All other items require permission
+      return userPermissions.includes(item.id);
+    });
+  }, [userRole, userPermissions]);
   const handleMenuItemClick = (path: string) => {
     router.push(path);
     setIsMobileMenuOpen(false);
@@ -163,7 +273,7 @@ export default function DashboardLayout({
                 : "opacity-100"
             }`}
           >
-            {userRole === "admin" ? "Admin" : "Reporter"}
+            Dashboard
           </h2>
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -195,35 +305,42 @@ export default function DashboardLayout({
               ))}
             </div>
           ) : (
-            // Render filtered menu items
             visibleMenuItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.id;
+              const isSupport = item.isSupport;
+              const isActive = !isSupport && pathname === item.id; // ✅ Support never active
+
               return (
                 <button
                   key={item.id}
                   onClick={() => handleMenuItemClick(item.id)}
                   title={isCollapsed ? item.label : ""}
                   className={`
-                    w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
-                    ${
-                      isCollapsed
-                        ? "lg:justify-center lg:px-0"
-                        : "justify-start"
-                    }
-                    ${
-                      isActive
-                        ? "bg-gray-900 text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }
-                  `}
+        w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
+        ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
+        ${
+          isActive
+            ? "bg-gray-900 text-white"
+            : "text-gray-700 hover:bg-gray-100"
+        }
+      `}
                 >
-                  <Icon
-                    className={`h-4 w-4 shrink-0 ${
-                      isCollapsed ? "lg:mr-0" : "mr-2"
-                    }`}
-                    weight={isActive ? "fill" : "regular"}
-                  />
+                  {" "}
+                  <div className="relative">
+                    <Icon
+                      className={`h-4 w-4 shrink-0 ${
+                        isCollapsed ? "lg:mr-0" : "mr-2"
+                      }`}
+                      weight={isActive ? "fill" : "regular"}
+                    />
+                    {item.showBadge &&
+                      ticketCount > 0 &&
+                      (userRole === "admin" || userRole === "superadmin") && (
+                        <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                          {ticketCount > 9 ? "9+" : ticketCount}
+                        </span>
+                      )}
+                  </div>
                   <span
                     className={`transition-all duration-300 ${
                       isCollapsed

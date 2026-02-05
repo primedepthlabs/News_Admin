@@ -99,12 +99,55 @@ export default function DashboardPage() {
   const [topAuthors, setTopAuthors] = useState<Author[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.push("/login");
-    });
+    const checkAuth = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      // Get user role
+      const { data: userData, error: userError } = await supabase
+        .from("dashboardUsers")
+        .select("role, permissions")
+        .eq("id", session.user.id)
+        .single();
+
+      if (userError || !userData) {
+        console.error("Error fetching user data:", userError);
+        router.push("/login");
+        return;
+      }
+
+      setUserRole(userData.role);
+
+      // Only superadmin and admin can access dashboard
+      // Only superadmin OR users with /dashboard permission
+      if (userData.role !== "superadmin") {
+        // Check if user has permission
+        if (
+          !userData.permissions ||
+          !userData.permissions.includes("/dashboard")
+        ) {
+          router.push("/my-panel"); // Redirect if no permission
+          return;
+        }
+      }
+
+      setAuthChecked(true);
+    };
+
+    checkAuth();
   }, [router]);
   useEffect(() => {
+    if (!authChecked) return; // Don't fetch stats until auth is checked
+
     const fetchAllStats = async () => {
       setLoading(true);
 
@@ -141,13 +184,13 @@ export default function DashboardPage() {
         const totalViewCount =
           newsData.data?.reduce(
             (sum, item) => sum + (item.view_count || 0),
-            0
+            0,
           ) || 0;
 
         const totalShareCount =
           newsData.data?.reduce(
             (sum, item) => sum + (item.share_count || 0),
-            0
+            0,
           ) || 0;
 
         setStats({
@@ -208,14 +251,14 @@ export default function DashboardPage() {
               name: cat.name,
               count: count || 0,
             };
-          })
+          }),
         );
 
         setCategoryData(
           categoryStats
             .filter((c) => c.count > 0)
             .sort((a, b) => b.count - a.count)
-            .slice(0, 5)
+            .slice(0, 5),
         );
 
         setRecentArticles(recentNews.data || []);
@@ -264,11 +307,10 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-
     fetchAllStats();
-  }, []);
+  }, [authChecked]);
 
-  if (loading) return <DashboardSkeleton />;
+  if (loading || !authChecked) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-6">
@@ -276,6 +318,11 @@ export default function DashboardPage() {
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-900 text-white">
+              {userRole === "superadmin" ? "Super Admin" : "Admin"}
+            </span>
+          </div>
         </div>
       </div>
       {/* Stats Cards */}
@@ -561,7 +608,7 @@ export default function DashboardPage() {
                             {
                               month: "short",
                               day: "numeric",
-                            }
+                            },
                           )}
                         </span>
                         <span className="flex items-center gap-1">
