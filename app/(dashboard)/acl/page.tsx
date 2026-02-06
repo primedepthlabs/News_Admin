@@ -21,9 +21,9 @@ const AVAILABLE_ROUTES = [
   { id: "/dashboard", label: "Dashboard", icon: ChartBar },
   { id: "/my-panel", label: "My Panel", icon: User },
   { id: "/approval", label: "News Approval", icon: ShieldCheck },
+  { id: "/team", label: "Team", icon: ChartBar },
   { id: "/users", label: "Users", icon: Users },
   { id: "/news", label: "News", icon: Newspaper },
-  { id: "/settings", label: "Settings", icon: Gear },
 ];
 
 type DashboardUser = {
@@ -459,6 +459,23 @@ export default function ACLPermissionsManager() {
 
           <div className="space-y-3">
             {filteredUsers.map((user, index) => {
+              // Calculate max routes for this user
+              const maxRoutes =
+                user.role === "admin"
+                  ? AVAILABLE_ROUTES.filter((r) => r.id !== "/my-panel").length
+                  : AVAILABLE_ROUTES.filter((r) => r.id !== "/team").length;
+
+              const userPermCount = user.permissions.length;
+              const percentage = (userPermCount / maxRoutes) * 100;
+
+              // Determine color
+              let barColor = "bg-green-400";
+              if (userPermCount === 0) {
+                barColor = "bg-red-400";
+              } else if (userPermCount < maxRoutes) {
+                barColor = "bg-yellow-400";
+              }
+
               return (
                 <div
                   key={user.id}
@@ -516,48 +533,25 @@ export default function ACLPermissionsManager() {
                   <div className="p-4 bg-gradient-to-br from-white to-gray-50">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-xs font-semibold text-gray-700">
-                        Page Permissions ({user.permissions.length}/
-                        {user.role === "admin"
-                          ? AVAILABLE_ROUTES.filter((r) => r.id !== "/my-panel")
-                              .length
-                          : AVAILABLE_ROUTES.length}
-                        )
+                        Page Permissions ({userPermCount}/{maxRoutes})
                       </p>
                       <div className="h-1.5 w-24 bg-gray-200 rounded-full overflow-hidden">
                         <div
-                          className={`h-full transition-all duration-500 rounded-full ${
-                            user.permissions.length === 0
-                              ? "bg-red-400"
-                              : user.permissions.length <
-                                  (user.role === "admin"
-                                    ? AVAILABLE_ROUTES.filter(
-                                        (r) => r.id !== "/my-panel",
-                                      ).length
-                                    : AVAILABLE_ROUTES.length)
-                                ? "bg-yellow-400"
-                                : "bg-green-400"
-                          }`}
-                          style={{
-                            width: `${
-                              (user.permissions.length /
-                                (user.role === "admin"
-                                  ? AVAILABLE_ROUTES.filter(
-                                      (r) => r.id !== "/my-panel",
-                                    ).length
-                                  : AVAILABLE_ROUTES.length)) *
-                              100
-                            }%`,
-                          }}
+                          className={`h-full transition-all duration-500 rounded-full ${barColor}`}
+                          style={{ width: `${percentage}%` }}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
                       {AVAILABLE_ROUTES.filter((route) => {
-                        // Hide My Panel for admins - it's only for reporters
                         if (route.id === "/my-panel" && user.role === "admin") {
                           return false;
+                        } // Hide /team from reporters - ADD THIS
+                        if (route.id === "/team" && user.role === "reporter") {
+                          return false;
                         }
+
                         return true;
                       }).map((route) => {
                         const RouteIcon = route.icon;
@@ -574,18 +568,18 @@ export default function ACLPermissionsManager() {
                             }
                             disabled={isDisabled}
                             className={`
-                            group relative px-3 py-2.5 rounded-lg border-2 transition-all duration-300 text-left
-                            ${
-                              hasPermission
-                                ? "border-green-500 bg-green-50 hover:bg-green-100 hover:border-green-600 shadow-sm"
-                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
-                            }
-                            ${
-                              isDisabled
-                                ? "cursor-not-allowed opacity-60"
-                                : "cursor-pointer transform hover:scale-105"
-                            }
-                          `}
+                  group relative px-3 py-2.5 rounded-lg border-2 transition-all duration-300 text-left
+                  ${
+                    hasPermission
+                      ? "border-green-500 bg-green-50 hover:bg-green-100 hover:border-green-600 shadow-sm"
+                      : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                  }
+                  ${
+                    isDisabled
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer transform hover:scale-105"
+                  }
+                `}
                           >
                             <div className="flex items-center gap-2">
                               <RouteIcon

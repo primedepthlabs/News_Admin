@@ -31,7 +31,7 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [ticketCount, setTicketCount] = useState(0);
   const pathname = usePathname();
-
+  const [userName, setUserName] = useState<string>("");
   const router = useRouter();
   const menuItems = [
     { id: "/dashboard", label: "Dashboard", icon: ChartBar },
@@ -52,10 +52,9 @@ export default function DashboardLayout({
       label: "Advertisement Management",
       icon: MegaphoneIcon,
     },
-    { id: "/reporters", label: "Team", icon: ChartBar },
+    { id: "/team", label: "Team", icon: ChartBar },
     { id: "/users", label: "Users", icon: Users },
     { id: "/news", label: "News", icon: Newspaper },
-    { id: "/settings", label: "Settings", icon: Gear },
     {
       id: "/support",
       label: "Support",
@@ -64,6 +63,7 @@ export default function DashboardLayout({
       showBadge: true,
     },
   ];
+
   useEffect(() => {
     fetchUserRoleAndPermissions();
   }, []);
@@ -176,7 +176,7 @@ export default function DashboardLayout({
 
       const { data: userData, error } = await supabase
         .from("dashboardUsers")
-        .select("role, permissions")
+        .select("role, permissions, full_name") // ✅ Add full_name here
         .eq("id", session.user.id)
         .single();
 
@@ -188,6 +188,7 @@ export default function DashboardLayout({
 
       setUserRole(userData?.role || null);
       setUserPermissions(userData?.permissions || []);
+      setUserName(userData?.full_name || "User"); // ✅ Add this line
       setLoading(false);
     } catch (err) {
       console.error("Error in fetchUserRoleAndPermissions:", err);
@@ -356,17 +357,53 @@ export default function DashboardLayout({
           )}
         </nav>
 
-        {/* Logout Button */}
-        <div className="p-2 border-t border-gray-200">
+        {/* User Info and Logout Section */}
+        <div className="p-2 border-t border-gray-200 space-y-1">
+          {/* User Info Display (Not Clickable) */}
+          <div
+            className={`
+      w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg
+      ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
+      bg-gray-50 border border-gray-200
+    `}
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div
+                className={`flex-1 text-left transition-all duration-300 ${
+                  isCollapsed
+                    ? "lg:opacity-0 lg:w-0 lg:overflow-hidden"
+                    : "opacity-100"
+                }`}
+              >
+                {loading ? (
+                  <div className="space-y-1">
+                    <div className="h-3 bg-gray-200 animate-pulse rounded w-20" />
+                    <div className="h-2 bg-gray-200 animate-pulse rounded w-16" />
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold text-gray-900 capitalize truncate">
+                      {userName || "User"}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate capitalize">
+                      {userRole || "Role"}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Logout Button */}
           <button
             onClick={handleLogout}
             disabled={loggingOut}
             title={isCollapsed ? "Logout" : ""}
             className={`
-              w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
-              ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
-              text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed
-            `}
+      w-full flex items-center px-3 py-2 text-xs font-medium rounded-lg transition-all duration-300 cursor-pointer
+      ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-start"}
+      text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed
+    `}
           >
             <SignOut
               className={`h-4 w-4 shrink-0 ${isCollapsed ? "lg:mr-0" : "mr-2"}`}
