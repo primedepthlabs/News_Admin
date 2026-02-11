@@ -20,6 +20,10 @@ type MediaItem = {
   url: string;
   order: number;
 };
+type Reporter = {
+  full_name: string;
+  email: string;
+};
 type News = {
   id: number;
   title: string;
@@ -74,6 +78,23 @@ export default function NewsApprovalPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [reporters, setReporters] = useState<Map<string, Reporter>>(new Map());
+
+  const [filters, setFilters] = useState({
+    search: "",
+    status: "all", // all, pending, processing
+    category: "all",
+    reporter: "all",
+    breaking: "all", // all, breaking, regular
+    dateFrom: "",
+    dateTo: "",
+    location: "all",
+    sortBy: "newest", // newest, oldest, titleAZ, titleZA
+    hasMedia: "all", // all, with, without
+    hasLinks: "all", // all, with, without
+  });
+
+  const [showFilters, setShowFilters] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -149,26 +170,53 @@ export default function NewsApprovalPage() {
       console.error("Error fetching pending news:", error);
     } else {
       setPendingNews(data || []);
+      if (data) {
+        await fetchReporters(data);
+      }
     }
     setLoading(false);
   };
+  const fetchReporters = async (newsData: News[]) => {
+    const authorIds = newsData
+      .map((n) => n.author_id)
+      .filter((id): id is string => id !== null);
 
+    if (authorIds.length === 0) return;
+
+    const { data, error } = await supabase
+      .from("dashboardUsers")
+      .select("id, full_name, email")
+      .in("id", authorIds);
+
+    if (error) {
+      console.error("Error fetching reporters:", error);
+    } else if (data) {
+      const reporterMap = new Map<string, Reporter>();
+      data.forEach((reporter: any) => {
+        reporterMap.set(reporter.id, {
+          full_name: reporter.full_name,
+          email: reporter.email,
+        });
+      });
+      setReporters(reporterMap);
+    }
+  };
   useEffect(() => {
     fetchCategories();
   }, []);
 
- useEffect(() => {
-  if (
-    authChecked &&
-    (userRole === "superadmin" ||  // ✅ ADD THIS LINE
-      userRole === "admin" ||
-      (userRole === "reporter" && userPermissions.includes("/approval")))
-  ) {
-    fetchPendingNews();
-  } else if (authChecked) {
-    setLoading(false);
-  }
-}, [authChecked, userRole, userPermissions]);
+  useEffect(() => {
+    if (
+      authChecked &&
+      (userRole === "superadmin" || // ✅ ADD THIS LINE
+        userRole === "admin" ||
+        (userRole === "reporter" && userPermissions.includes("/approval")))
+    ) {
+      fetchPendingNews();
+    } else if (authChecked) {
+      setLoading(false);
+    }
+  }, [authChecked, userRole, userPermissions]);
   const getCategoryName = (categoryId: number | null) => {
     if (!categoryId) return "Uncategorized";
     const category = categories.find((cat) => cat.id === categoryId);
@@ -266,7 +314,30 @@ export default function NewsApprovalPage() {
     setSelectedNews(newsItem);
     setIsPreviewOpen(true);
   };
+  const getReporterInfo = (authorId: string | null) => {
+    if (!authorId) return null;
+    return reporters.get(authorId);
+  };
 
+  const filteredNews = pendingNews.filter((news) => {
+    if (filters.status !== "all" && news.status !== filters.status)
+      return false;
+    if (
+      filters.category !== "all" &&
+      news.category_id?.toString() !== filters.category
+    )
+      return false;
+    if (filters.reporter !== "all" && news.author_id !== filters.reporter)
+      return false;
+    if (filters.breaking === "breaking" && !news.is_breaking) return false;
+    if (filters.breaking === "regular" && news.is_breaking) return false;
+    if (
+      filters.search &&
+      !news.title.toLowerCase().includes(filters.search.toLowerCase())
+    )
+      return false;
+    return true;
+  });
   if (loading) {
     return (
       <div className="space-y-4">
@@ -287,13 +358,13 @@ export default function NewsApprovalPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">News Approval</h1>
-          <p className="text-xs text-gray-600 mt-1">
+          <p className="text-sm text-gray-600 mt-1">
             Review and approve pending news articles
           </p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <Clock className="h-4 w-4 text-yellow-600" weight="fill" />
-          <span className="text-xs font-medium text-yellow-700">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+          <Clock className="h-4 w-4 text-gray-600" weight="fill" />
+          <span className="text-sm font-medium text-gray-700">
             {pendingNews.filter((n) => n.status === "pending").length} Pending /{" "}
             {pendingNews.filter((n) => n.status === "processing").length}{" "}
             Processing
@@ -301,96 +372,197 @@ export default function NewsApprovalPage() {
         </div>
       </div>
 
-      {/* Pending News List */}
-      {pendingNews.length === 0 ? (
+      {/* Filters */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search articles..."
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          />
+
+          {/* Status */}
+          <select
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+          </select>
+
+          {/* Category */}
+          <select
+            value={filters.category}
+            onChange={(e) =>
+              setFilters({ ...filters, category: e.target.value })
+            }
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            <option value="all">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id.toString()}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Reporter */}
+          <select
+            value={filters.reporter}
+            onChange={(e) =>
+              setFilters({ ...filters, reporter: e.target.value })
+            }
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            <option value="all">All Reporters</option>
+            {Array.from(reporters.entries()).map(([id, reporter]) => (
+              <option key={id} value={id}>
+                {reporter.full_name}
+              </option>
+            ))}
+          </select>
+
+          {/* Breaking */}
+          <select
+            value={filters.breaking}
+            onChange={(e) =>
+              setFilters({ ...filters, breaking: e.target.value })
+            }
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          >
+            <option value="all">All News</option>
+            <option value="breaking">Breaking Only</option>
+            <option value="regular">Regular Only</option>
+          </select>
+        </div>
+
+        {/* Filter Summary */}
+        {(filters.status !== "all" ||
+          filters.category !== "all" ||
+          filters.reporter !== "all" ||
+          filters.breaking !== "all" ||
+          filters.search) && (
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing {filteredNews.length} of {pendingNews.length} articles
+            </p>
+            <button
+              onClick={() =>
+                setFilters({
+                  search: "",
+                  status: "all",
+                  category: "all",
+                  reporter: "all",
+                  breaking: "all",
+                  dateFrom: "",
+                  dateTo: "",
+                  location: "all",
+                  sortBy: "newest",
+                  hasMedia: "all",
+                  hasLinks: "all",
+                })
+              }
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* List */}
+      {filteredNews.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 text-center py-12">
           <CheckCircle
             className="h-12 w-12 text-gray-400 mx-auto mb-3"
             weight="duotone"
           />
           <p className="text-sm font-medium text-gray-900 mb-1">
-            All caught up!
+            No articles found
           </p>
-          <p className="text-xs text-gray-600">
-            No pending news articles to review
+          <p className="text-sm text-gray-600">
+            {pendingNews.length === 0
+              ? "No pending news articles to review"
+              : "Try adjusting your filters"}
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {pendingNews.map((newsItem) => (
-            <div
-              key={newsItem.id}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="p-4">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      {newsItem.is_breaking && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-red-100 text-red-700">
-                          <TrendUp className="h-3 w-3" weight="bold" />
-                          Breaking News
-                        </span>
-                      )}
-                      {getStatusBadge(newsItem.status)}
-                    </div>
-                    <h2 className="text-lg font-bold text-gray-900 mb-1">
-                      {newsItem.title}
-                    </h2>
-                    {newsItem.excerpt && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {newsItem.excerpt}
-                      </p>
-                    )}
-                  </div>
-                </div>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {/* Table Header */}
+          <div className="bg-gray-50 border-b border-gray-200 px-4 py-3">
+            <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-600">
+              <div className="col-span-4">Article</div>
+              <div className="col-span-2">Reporter</div>
+              <div className="col-span-2">Category</div>
+              <div className="col-span-1">Date</div>
+              <div className="col-span-1">Status</div>
+              <div className="col-span-2 text-right">Actions</div>
+            </div>
+          </div>
 
-                {/* Meta Information */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 pb-4 border-b border-gray-200">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-400" weight="duotone" />
-                    <div>
-                      <p className="text-[10px] text-gray-500">Author</p>
-                      <p className="text-xs font-medium text-gray-900">
-                        {newsItem.author_name || "Anonymous"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Tag className="h-4 w-4 text-gray-400" weight="duotone" />
-                    <div>
-                      <p className="text-[10px] text-gray-500">Category</p>
-                      <p className="text-xs font-medium text-gray-900">
-                        {getCategoryName(newsItem.category_id)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {newsItem.location && (
-                    <div className="flex items-center gap-2">
-                      <MapPin
-                        className="h-4 w-4 text-gray-400"
-                        weight="duotone"
-                      />
-                      <div>
-                        <p className="text-[10px] text-gray-500">Location</p>
-                        <p className="text-xs font-medium text-gray-900">
-                          {newsItem.location}
-                        </p>
+          {/* Table Body */}
+          <div className="divide-y divide-gray-100">
+            {filteredNews.map((newsItem) => {
+              const reporter = getReporterInfo(newsItem.author_id);
+              return (
+                <div
+                  key={newsItem.id}
+                  className="px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    {/* Article */}
+                    <div className="col-span-4">
+                      <div className="flex items-start gap-2">
+                        {newsItem.is_breaking && (
+                          <TrendUp
+                            className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5"
+                            weight="bold"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900 line-clamp-1">
+                            {newsItem.title}
+                          </h3>
+                          {newsItem.excerpt && (
+                            <p className="text-xs text-gray-600 line-clamp-1 mt-0.5">
+                              {newsItem.excerpt}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  <div className="flex items-center gap-2">
-                    <Calendar
-                      className="h-4 w-4 text-gray-400"
-                      weight="duotone"
-                    />
-                    <div>
-                      <p className="text-[10px] text-gray-500">Submitted</p>
-                      <p className="text-xs font-medium text-gray-900">
+                    {/* Reporter */}
+                    <div className="col-span-2">
+                      {reporter ? (
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {reporter.full_name}
+                          </p>
+                          <p className="text-xs text-gray-600 truncate">
+                            {reporter.email}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Unknown</p>
+                      )}
+                    </div>
+
+                    {/* Category */}
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-700">
+                        {getCategoryName(newsItem.category_id)}
+                      </span>
+                    </div>
+
+                    {/* Date */}
+                    <div className="col-span-1">
+                      <p className="text-xs text-gray-600">
                         {new Date(newsItem.created_at).toLocaleDateString(
                           "en-US",
                           {
@@ -400,64 +572,70 @@ export default function NewsApprovalPage() {
                         )}
                       </p>
                     </div>
+
+                    {/* Status */}
+                    <div className="col-span-1">
+                      {getStatusBadge(newsItem.status)}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-2 flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => openPreview(newsItem)}
+                        className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                        title="Preview"
+                      >
+                        <Eye
+                          className="h-4 w-4 text-gray-600"
+                          weight="duotone"
+                        />
+                      </button>
+
+                      {newsItem.status === "pending" &&
+                        userRole !== "reporter" && (
+                          <button
+                            onClick={() => handleProcessing(newsItem.id)}
+                            disabled={actionLoading === newsItem.id}
+                            className="p-1.5 hover:bg-blue-100 text-blue-600 rounded transition-colors disabled:opacity-50"
+                            title="Processing"
+                          >
+                            <Clock className="h-4 w-4" weight="fill" />
+                          </button>
+                        )}
+
+                      {userRole === "superadmin" &&
+                        newsItem.status === "processing" && (
+                          <button
+                            onClick={() => handleApprove(newsItem.id)}
+                            disabled={actionLoading === newsItem.id}
+                            className="p-1.5 hover:bg-green-100 text-green-600 rounded transition-colors disabled:opacity-50"
+                            title="Approve"
+                          >
+                            <CheckCircle className="h-4 w-4" weight="fill" />
+                          </button>
+                        )}
+
+                      <button
+                        onClick={() => handleReject(newsItem.id)}
+                        disabled={actionLoading === newsItem.id}
+                        className="p-1.5 hover:bg-red-100 text-red-600 rounded transition-colors disabled:opacity-50"
+                        title="Reject"
+                      >
+                        <XCircle className="h-4 w-4" weight="fill" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openPreview(newsItem)}
-                    className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs font-medium"
-                  >
-                    <Eye className="h-3.5 w-3.5" weight="duotone" />
-                    Preview
-                  </button>
-
-                  {/* Processing Button - Show only if status is pending */}
-                  {newsItem.status === "pending" && userRole !== "reporter" && (
-                    <button
-                      onClick={() => handleProcessing(newsItem.id)}
-                      disabled={actionLoading === newsItem.id}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Clock className="h-3.5 w-3.5" weight="fill" />
-                      Processing
-                    </button>
-                  )}
-
-                  {/* Approve Button - Show only for superadmin AND if status is processing */}
-                  {userRole === "superadmin" &&
-                    newsItem.status === "processing" && (
-                      <button
-                        onClick={() => handleApprove(newsItem.id)}
-                        disabled={actionLoading === newsItem.id}
-                        className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" weight="fill" />
-                        Approve
-                      </button>
-                    )}
-
-                  {/* Reject Button - Always visible */}
-                  <button
-                    onClick={() => handleReject(newsItem.id)}
-                    disabled={actionLoading === newsItem.id}
-                    className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1.5 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <XCircle className="h-3.5 w-3.5" weight="fill" />
-                    Reject
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Preview Dialog */}
+      {/* Keep existing Preview Dialog - don't change it */}
       {isPreviewOpen && selectedNews && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Dialog Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">
@@ -475,9 +653,34 @@ export default function NewsApprovalPage() {
               </button>
             </div>
 
-            {/* Dialog Content */}
             <div className="overflow-y-auto p-6 space-y-4">
-              {/* Cover Image */}
+              {/* Reporter Info */}
+              {selectedNews.author_id &&
+                getReporterInfo(selectedNews.author_id) && (
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-xs font-semibold text-gray-900 mb-2">
+                      Submitted By
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <User
+                          className="h-5 w-5 text-gray-600"
+                          weight="duotone"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {getReporterInfo(selectedNews.author_id)?.full_name}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {getReporterInfo(selectedNews.author_id)?.email}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              {/* Keep all existing preview content exactly as is */}
               {selectedNews.image && (
                 <img
                   src={selectedNews.image}
@@ -485,7 +688,7 @@ export default function NewsApprovalPage() {
                   className="w-full h-64 object-cover rounded-lg"
                 />
               )}
-              {/* Media Gallery - Compact Inline */}
+
               {selectedNews.media && selectedNews.media.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-gray-900 flex items-center gap-1.5">
@@ -509,22 +712,18 @@ export default function NewsApprovalPage() {
                       .map((item, index) => (
                         <div key={index} className="relative group">
                           {item.type === "image" ? (
-                            <div className="relative aspect-square rounded overflow-hidden border border-gray-200 hover:border-blue-400 transition-colors">
+                            <div className="relative aspect-square rounded overflow-hidden border border-gray-200">
                               <img
                                 src={item.url}
                                 alt={`#${index + 1}`}
                                 className="w-full h-full object-cover"
                               />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                               <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded">
                                 #{index + 1}
                               </div>
-                              <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded">
-                                IMG
-                              </div>
                             </div>
                           ) : (
-                            <div className="relative aspect-square rounded overflow-hidden border-2 border-dashed border-purple-300 bg-purple-50 hover:border-purple-400 transition-colors">
+                            <div className="relative aspect-square rounded overflow-hidden border border-gray-200">
                               {getYouTubeVideoId(item.url) ? (
                                 <iframe
                                   className="w-full h-full"
@@ -535,24 +734,14 @@ export default function NewsApprovalPage() {
                                   allowFullScreen
                                 ></iframe>
                               ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center p-2">
-                                  <svg
-                                    className="h-8 w-8 text-purple-400 mb-1"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                                  </svg>
-                                  <span className="text-[8px] text-purple-600 font-bold text-center">
-                                    ERROR
+                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                  <span className="text-xs text-gray-500">
+                                    Invalid Video
                                   </span>
                                 </div>
                               )}
                               <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white text-[9px] font-bold rounded">
                                 #{index + 1}
-                              </div>
-                              <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-purple-500 text-white text-[9px] font-bold rounded">
-                                VID
                               </div>
                             </div>
                           )}
@@ -561,13 +750,13 @@ export default function NewsApprovalPage() {
                   </div>
                 </div>
               )}
-              {/* Badges */}
+
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">
+                <span className="px-3 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
                   {getCategoryName(selectedNews.category_id)}
                 </span>
                 {selectedNews.is_breaking && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded bg-red-100 text-red-700">
                     <TrendUp className="h-3.5 w-3.5" weight="bold" />
                     Breaking News
                   </span>
@@ -575,16 +764,11 @@ export default function NewsApprovalPage() {
                 {getStatusBadge(selectedNews.status)}
               </div>
 
-              {/* Title */}
               <h1 className="text-3xl font-bold text-gray-900">
                 {selectedNews.title}
               </h1>
-              {/* Meta */}
+
               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 pb-4 border-b border-gray-200">
-                <div className="flex items-center gap-1.5">
-                  <User className="h-4 w-4" weight="duotone" />
-                  <span>By {selectedNews.author_name || "Anonymous"}</span>
-                </div>
                 {selectedNews.location && (
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-4 w-4" weight="duotone" />
@@ -605,19 +789,19 @@ export default function NewsApprovalPage() {
                   </span>
                 </div>
               </div>
-              {/* Excerpt */}
+
               {selectedNews.excerpt && (
                 <p className="text-lg text-gray-700 italic">
                   {selectedNews.excerpt}
                 </p>
               )}
-              {/* Content */}
+
               <div className="prose max-w-none">
                 <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
                   {selectedNews.content}
                 </p>
               </div>
-              {/* Author Bio */}
+
               {selectedNews.author_bio && (
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <p className="text-xs font-semibold text-gray-900 mb-1">
@@ -628,7 +812,7 @@ export default function NewsApprovalPage() {
                   </p>
                 </div>
               )}
-              {/* Add this after the Author Bio section */}
+
               {selectedNews.links && selectedNews.links.length > 0 && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <p className="text-xs font-semibold text-gray-900 mb-2">
@@ -651,7 +835,6 @@ export default function NewsApprovalPage() {
               )}
             </div>
 
-            {/* Dialog Footer */}
             <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={() => setIsPreviewOpen(false)}
@@ -660,8 +843,7 @@ export default function NewsApprovalPage() {
                 Close
               </button>
 
-              {/* Processing Button - Show only if status is pending */}
-              {selectedNews.status === "pending" && (
+              {selectedNews.status === "pending" && userRole !== "reporter" && (
                 <button
                   onClick={() => {
                     handleProcessing(selectedNews.id);
@@ -674,7 +856,6 @@ export default function NewsApprovalPage() {
                 </button>
               )}
 
-              {/* Approve Button - Show only for superadmin AND if status is processing */}
               {userRole === "superadmin" &&
                 selectedNews.status === "processing" && (
                   <button
@@ -689,7 +870,6 @@ export default function NewsApprovalPage() {
                   </button>
                 )}
 
-              {/* Reject Button - Always visible */}
               <button
                 onClick={() => {
                   handleReject(selectedNews.id);

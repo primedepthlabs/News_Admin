@@ -86,9 +86,10 @@ export default function ACLPermissionsManager() {
 
         setCurrentUserRole(userData?.role || null);
         setAuthChecked(true);
-
-        if (userData?.role !== "superadmin") {
-          setError("Access denied. Only superadmin can manage permissions.");
+        if (userData?.role !== "superadmin" && userData?.role !== "admin") {
+          setError(
+            "Access denied. Only superadmin and admin can manage permissions.",
+          );
           setLoading(false);
         }
       } catch (err) {
@@ -100,15 +101,16 @@ export default function ACLPermissionsManager() {
 
     checkAuth();
   }, [router]);
-
   useEffect(() => {
-    if (authChecked && currentUserRole === "superadmin") {
+    if (
+      authChecked &&
+      (currentUserRole === "superadmin" || currentUserRole === "admin")
+    ) {
       fetchUsers();
     } else if (authChecked) {
       setLoading(false);
     }
   }, [currentUserRole, authChecked]);
-
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -210,8 +212,7 @@ export default function ACLPermissionsManager() {
   };
 
   if (loading) return <UsersSkeleton />;
-
-  if (currentUserRole !== "superadmin") {
+  if (currentUserRole !== "superadmin" && currentUserRole !== "admin") {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-3">
@@ -223,7 +224,7 @@ export default function ACLPermissionsManager() {
               Access Denied
             </h2>
             <p className="text-sm text-gray-600">
-              Only superadmin can manage permissions.
+              Only superadmin and admin can manage permissions.
             </p>
           </div>
         </div>

@@ -195,27 +195,32 @@ export default function DashboardLayout({
       setLoading(false);
     }
   };
-  const visibleMenuItems = useMemo(() => {
-    return menuItems.filter((item) => {
-      // Support is ALWAYS visible for everyone
-      if (item.isSupport) {
-        return true;
-      }
+const visibleMenuItems = useMemo(() => {
+  return menuItems.filter((item) => {
+    // Support is ALWAYS visible for everyone
+    if (item.isSupport) {
+      return true;
+    }
 
-      // SuperAdmin sees everything
-      if (userRole === "superadmin") {
-        return true;
-      }
+    // SuperAdmin sees everything
+    if (userRole === "superadmin") {
+      return true;
+    }
 
-      // My Panel requires BOTH reporter role AND permission
-      if (item.id === "/my-panel") {
-        return userRole === "reporter" && userPermissions.includes("/my-panel");
-      }
+    // ACL is visible to both superadmin AND admin (always)
+    if (item.id === "/acl") {
+      return userRole === "superadmin" || userRole === "admin";
+    }
 
-      // All other items require permission
-      return userPermissions.includes(item.id);
-    });
-  }, [userRole, userPermissions]);
+    // My Panel requires BOTH reporter role AND permission
+    if (item.id === "/my-panel") {
+      return userRole === "reporter" && userPermissions.includes("/my-panel");
+    }
+
+    // All other items require permission
+    return userPermissions.includes(item.id);
+  });
+}, [userRole, userPermissions]);
   const handleMenuItemClick = (path: string) => {
     router.push(path);
     setIsMobileMenuOpen(false);
