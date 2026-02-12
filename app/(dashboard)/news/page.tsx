@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Pencil } from "@phosphor-icons/react";
 import {
   Trash,
   Eye,
@@ -137,7 +138,20 @@ export default function NewsPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [selectedNews, setSelectedNews] = useState<News | null>(null);
   const router = useRouter();
-
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    excerpt: "",
+    content: "",
+    image: "",
+    category_id: "",
+    location: "",
+    author_name: "",
+    author_bio: "",
+    is_breaking: false,
+    status: "pending",
+    media: [] as MediaItem[],
+  });
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) router.push("/login");
@@ -238,7 +252,92 @@ export default function NewsPage() {
     setSelectedNews(newsItem);
     setIsDeleteDialogOpen(true);
   };
+  const handleEdit = (newsItem: News) => {
+    setSelectedNews(newsItem);
+    setEditFormData({
+      title: newsItem.title || "",
+      excerpt: newsItem.excerpt || "",
+      content: newsItem.content || "",
+      image: newsItem.image || "",
+      category_id: newsItem.category_id?.toString() || "",
+      location: newsItem.location || "",
+      author_name: newsItem.author_name || "",
+      author_bio: newsItem.author_bio || "",
+      is_breaking: newsItem.is_breaking || false,
+      status: newsItem.status || "pending",
+      media: newsItem.media || [], // ADD THIS
+    });
+    setIsEditDialogOpen(true);
+  };
+  const addMediaItem = () => {
+    const newItem: MediaItem = {
+      type: "image",
+      url: "",
+      order: editFormData.media.length,
+    };
+    setEditFormData({
+      ...editFormData,
+      media: [...editFormData.media, newItem],
+    });
+  };
 
+  const removeMediaItem = (index: number) => {
+    const newMedia = editFormData.media.filter((_, i) => i !== index);
+    // Reorder after removal
+    const reorderedMedia = newMedia.map((item, i) => ({ ...item, order: i }));
+    setEditFormData({ ...editFormData, media: reorderedMedia });
+  };
+
+  const updateMediaItem = (
+    index: number,
+    field: keyof MediaItem,
+    value: any,
+  ) => {
+    const newMedia = [...editFormData.media];
+    newMedia[index] = { ...newMedia[index], [field]: value };
+    setEditFormData({ ...editFormData, media: newMedia });
+  };
+
+  const moveMediaItem = (index: number, direction: "up" | "down") => {
+    const newMedia = [...editFormData.media];
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (newIndex < 0 || newIndex >= newMedia.length) return;
+
+    // Swap items
+    [newMedia[index], newMedia[newIndex]] = [
+      newMedia[newIndex],
+      newMedia[index],
+    ];
+
+    // Update order
+    newMedia[index].order = index;
+    newMedia[newIndex].order = newIndex;
+
+    setEditFormData({ ...editFormData, media: newMedia });
+  };
+  const handleUpdateNews = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNews) return;
+
+    const { error } = await supabase
+      .from("news")
+      .update({
+        ...editFormData,
+        category_id: editFormData.category_id
+          ? parseInt(editFormData.category_id)
+          : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedNews.id);
+
+    if (error) {
+      console.error("Error updating news:", error);
+    } else {
+      fetchNews(currentPage);
+      setIsEditDialogOpen(false);
+    }
+  };
   const handleDeleteNews = async () => {
     if (!selectedNews) return;
 
@@ -370,6 +469,15 @@ export default function NewsPage() {
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
+                              className="h-7 w-7 flex items-center justify-center hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(newsItem);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                            </button>
+                            <button
                               className="h-7 w-7 flex items-center justify-center hover:bg-red-50 rounded transition-colors cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -439,16 +547,26 @@ export default function NewsPage() {
                         </div>
                       </div>
 
-                      {/* Delete Button */}
-                      <button
-                        className="w-full h-5 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(newsItem);
-                        }}
-                      >
-                        <Trash className="h-2.5 w-2.5 text-red-600" />
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          className="flex-1 h-5 flex items-center justify-center bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(newsItem);
+                          }}
+                        >
+                          <Pencil className="h-2.5 w-2.5 text-blue-600" />
+                        </button>
+                        <button
+                          className="flex-1 h-5 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(newsItem);
+                          }}
+                        >
+                          <Trash className="h-2.5 w-2.5 text-red-600" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -760,6 +878,321 @@ export default function NewsPage() {
                 className="flex-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors cursor-pointer font-medium"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Dialog */}
+      {isEditDialogOpen && selectedNews && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-3xl my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Edit Article
+                </h2>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Update article details
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditDialogOpen(false)}
+                className="h-8 w-8 flex items-center justify-center hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleUpdateNews}
+              className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
+            >
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.title}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, title: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  required
+                />
+              </div>
+
+              {/* Cover Image */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Cover Image URL
+                </label>
+                <input
+                  type="url"
+                  value={editFormData.image}
+                  onChange={(e) =>
+                    setEditFormData({ ...editFormData, image: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  placeholder="https://example.com/image.jpg"
+                />
+                {editFormData.image && (
+                  <img
+                    src={editFormData.image}
+                    alt="Cover preview"
+                    className="mt-2 w-full h-32 object-cover rounded-lg"
+                  />
+                )}
+              </div>
+
+              {/* Media Gallery */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-900">
+                    Media Gallery ({editFormData.media.length})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addMediaItem}
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    + Add Media
+                  </button>
+                </div>
+
+                {editFormData.media.length > 0 && (
+                  <div className="space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    {editFormData.media.map((item, index) => (
+                      <div
+                        key={index}
+                        className="bg-white border border-gray-300 rounded-lg p-3"
+                      >
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="px-2 py-1 text-xs font-bold bg-gray-200 text-gray-700 rounded">
+                            #{index + 1}
+                          </span>
+                          <select
+                            value={item.type}
+                            onChange={(e) =>
+                              updateMediaItem(index, "type", e.target.value)
+                            }
+                            className="px-2 py-1 text-xs border border-gray-300 rounded"
+                          >
+                            <option value="image">Image</option>
+                            <option value="video">Video</option>
+                          </select>
+                          <div className="flex gap-1 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => moveMediaItem(index, "up")}
+                              disabled={index === 0}
+                              className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveMediaItem(index, "down")}
+                              disabled={index === editFormData.media.length - 1}
+                              className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMediaItem(index)}
+                              className="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                        <input
+                          type="url"
+                          value={item.url}
+                          onChange={(e) =>
+                            updateMediaItem(index, "url", e.target.value)
+                          }
+                          placeholder={
+                            item.type === "image"
+                              ? "https://example.com/image.jpg"
+                              : "https://youtube.com/watch?v=..."
+                          }
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        {item.url && item.type === "image" && (
+                          <img
+                            src={item.url}
+                            alt={`Media ${index + 1}`}
+                            className="mt-2 w-full h-24 object-cover rounded"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Excerpt */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Excerpt
+                </label>
+                <textarea
+                  value={editFormData.excerpt}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      excerpt: e.target.value,
+                    })
+                  }
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              {/* Content */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Content *
+                </label>
+                <textarea
+                  value={editFormData.content}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      content: e.target.value,
+                    })
+                  }
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  required
+                />
+              </div>
+
+              {/* Category & Location */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={editFormData.category_id}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        category_id: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.location}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        location: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Author & Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Author Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.author_name}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        author_name: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
+                    Status
+                  </label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        status: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Breaking News */}
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="edit-breaking"
+                  checked={editFormData.is_breaking}
+                  onChange={(e) =>
+                    setEditFormData({
+                      ...editFormData,
+                      is_breaking: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label
+                  htmlFor="edit-breaking"
+                  className="text-sm font-medium text-gray-900"
+                >
+                  Mark as Breaking News
+                </label>
+              </div>
+            </form>
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setIsEditDialogOpen(false)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateNews}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+              >
+                <Pencil className="h-4 w-4" weight="fill" />
+                Save Changes
               </button>
             </div>
           </div>
