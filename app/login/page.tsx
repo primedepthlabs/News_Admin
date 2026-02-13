@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 
@@ -76,6 +76,38 @@ export default function AuthForm() {
     photo1: null,
     photo2: null,
   });
+  // Add this useEffect after your existing state declarations
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        // User is already logged in, check their role and redirect
+        const { data: userData } = await supabase
+          .from("dashboardUsers")
+          .select("role, permissions")
+          .eq("id", session.user.id)
+          .single();
+
+        if (userData?.role === "superadmin" || userData?.role === "admin") {
+          router.push("/dashboard");
+        } else if (userData?.role === "reporter") {
+          if (userData.permissions?.includes("/approval")) {
+            router.push("/approval");
+          } else {
+            router.push("/my-panel");
+          }
+        } else {
+          router.push("/my-panel");
+        }
+      }
+    };
+
+    checkSession();
+  }, [router]);
 
   const resetForm = () => {
     setFormData({

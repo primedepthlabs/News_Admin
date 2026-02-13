@@ -16,7 +16,7 @@ import {
   Lifebuoy,
 } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabaseClient";
-import { ShieldCheck } from "lucide-react";
+import { HelpCircle, HomeIcon, ShieldCheck } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -53,7 +53,8 @@ export default function DashboardLayout({
       icon: MegaphoneIcon,
     },
     { id: "/team", label: "Team", icon: ChartBar },
-    { id: "/support-privacy", label: "Support & Privacy", icon: ChartBar },
+    { id: "/support-privacy", label: "Support & Privacy", icon: HelpCircle },
+    { id: "/homepage-manager", label: "Home-Page Manager", icon: HomeIcon },
     { id: "/users", label: "Users", icon: Users },
     { id: "/news", label: "News", icon: Newspaper },
     {
@@ -208,8 +209,12 @@ export default function DashboardLayout({
         return true;
       }
 
-      // ACL is visible to both superadmin AND admin (always)
-      if (item.id === "/acl") {
+      // ACL, Support & Privacy, Homepage Manager - admin + superadmin only
+      if (
+        item.id === "/acl" ||
+        item.id === "/support-privacy" ||
+        item.id === "/homepage-manager"
+      ) {
         return userRole === "superadmin" || userRole === "admin";
       }
 
@@ -222,6 +227,7 @@ export default function DashboardLayout({
       return userPermissions.includes(item.id);
     });
   }, [userRole, userPermissions]);
+
   const handleMenuItemClick = (path: string) => {
     router.push(path);
     setIsMobileMenuOpen(false);
